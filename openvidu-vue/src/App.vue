@@ -23,9 +23,9 @@ let LIVEKIT_URL = '';
 configureUrls();
 
 function configureUrls() {
-    APPLICATION_SERVER_URL = 'https://' + 'hml-openvidu.prontumais.com.br:8080/';
+    APPLICATION_SERVER_URL = 'https://' + 'hml-openvidu.prontumais.com.br:8080/api/';
 
-    LIVEKIT_URL = 'wss://' + 'hml-openvidu.prontumais.com.br:7880/';
+    LIVEKIT_URL = 'wss://' + 'hml-openvidu.prontumais.com.br/ws';
 }
 
 const room = ref<Room>();

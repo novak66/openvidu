@@ -23,9 +23,9 @@ let LIVEKIT_URL = '';
 configureUrls();
 
 function configureUrls() {
-    APPLICATION_SERVER_URL = 'https://' + 'hml-openvidu.prontumais.com.br:8080';
+    APPLICATION_SERVER_URL = 'https://' + 'hml-openvidu.prontumais.com.br:8080/';
 
-    LIVEKIT_URL = 'wss://' + 'hml-openvidu.prontumais.com.br:7880';
+    LIVEKIT_URL = 'wss://' + 'hml-openvidu.prontumais.com.br:7880/';
 }
 
 const room = ref<Room>();
@@ -113,7 +113,7 @@ async function getToken(roomName: string, participantName: string) {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            roomName: 'Room-vwt2ohe2obqg6q6',
+            roomName: roomName,
             participantName
         })
     });

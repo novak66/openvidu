@@ -31,9 +31,9 @@ import java.util.Map;
 @RestController
 public class Controller {
 
-	private String LIVEKIT_API_KEY = "testandoEssaSecretParaTercertezaqueelavaitermaisdetrintaedoischaracteres";
+	private String LIVEKIT_API_KEY = "devkey";
 
-	private String LIVEKIT_API_SECRET ="testandoEssaSecretParaTercertezaqueelavaitermaisdetrintaedoischaracteres";
+	private String LIVEKIT_API_SECRET ="secret";
 
 	/**
 	 * @param params JSON object with roomName and participantName

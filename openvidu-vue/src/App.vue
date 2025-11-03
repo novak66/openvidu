@@ -96,7 +96,13 @@ export default {
             try {
                 const token = await this.getToken(this.participantName);
                 await this.room.connect(this.LIVEKIT_URL, token);
-                await this.room.localParticipant.enableCameraAndMicrophone();
+
+                // TROQUE ESTA LINHA:
+                // await this.room.localParticipant.enableCameraAndMicrophone();
+
+                // POR ESTAS:
+                await this.room.localParticipant.setCameraEnabled(true);
+                await this.room.localParticipant.setMicrophoneEnabled(true);
 
                 const iterator = this.room.localParticipant.videoTrackPublications.values();
                 const firstPublication = iterator.next().value;
@@ -104,7 +110,7 @@ export default {
                 this.entrou = true;
             } catch (error: any) {
                 console.log('Erro ao conectar na sala:', error.message);
-                await this.leaveRoom();
+                //await this.leaveRoom();
             }
         },
 
@@ -116,6 +122,23 @@ export default {
             this.room = undefined;
             this.localTrack = undefined;
             this.remoteTracksMap.clear();
+        },
+
+        async config(): Promise<string> {
+            const select = this.roomSelected;
+            const response = await fetch(
+                this.APPLICATION_OPENVIDU_V1_SERVER_URL + 'rooms/' + select?.roomId + '/config',
+                {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer ' + this.loginToken
+                    }
+                }
+            );
+
+            const data = await response.json();
+            return data.token;
         },
 
         async getToken(participantName: string): Promise<string> {

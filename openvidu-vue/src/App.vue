@@ -1,7 +1,7 @@
 <script lang="ts">
 import {
     LocalVideoTrack,
-    RemoteParticipant,
+    createLocalTracks,
     RemoteTrack,
     RemoteTrackPublication,
     Room,
@@ -79,38 +79,46 @@ export default {
         async joinRoom() {
             this.room = new Room();
 
-            this.room.on(
-                RoomEvent.TrackSubscribed,
-                (_track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-                    this.remoteTracksMap.set(publication.trackSid, {
-                        trackPublication: publication,
-                        participantIdentity: participant.identity
-                    });
-                }
-            );
+            // LOG TODOS OS EVENTOS
+            this.room.on(RoomEvent.Connected, () => {
+                console.log('✅ RoomEvent.Connected');
+            });
 
-            this.room.on(RoomEvent.TrackUnsubscribed, (_track: RemoteTrack, publication: RemoteTrackPublication) => {
-                this.remoteTracksMap.delete(publication.trackSid);
+            this.room.on(RoomEvent.Disconnected, (reason) => {
+                console.error('❌ RoomEvent.Disconnected:', reason);
+            });
+
+            this.room.on(RoomEvent.Reconnecting, () => {
+                console.warn('🔄 RoomEvent.Reconnecting');
+            });
+
+            this.room.on(RoomEvent.Reconnected, () => {
+                console.log('✅ RoomEvent.Reconnected');
+            });
+
+            this.room.on(RoomEvent.SignalConnected, () => {
+                console.log('✅ RoomEvent.SignalConnected - WebSocket conectado!');
+            });
+
+            this.room.on(RoomEvent.TrackSubscribed, (...args) => {
+                console.log('✅ RoomEvent.TrackSubscribed:', args);
+                // seu código existente
             });
 
             try {
                 const token = await this.getToken(this.participantName);
+                console.log('🔑 Token obtido');
+
                 await this.room.connect(this.LIVEKIT_URL, token);
-
-                // TROQUE ESTA LINHA:
-                // await this.room.localParticipant.enableCameraAndMicrophone();
-
-                // POR ESTAS:
-                await this.room.localParticipant.setCameraEnabled(true);
-                await this.room.localParticipant.setMicrophoneEnabled(true);
+                console.log('✅ room.connect() completou, state:', this.room.state);
 
                 const iterator = this.room.localParticipant.videoTrackPublications.values();
                 const firstPublication = iterator.next().value;
                 this.localTrack = firstPublication ? firstPublication.videoTrack : undefined;
-                this.entrou = true;
             } catch (error: any) {
-                console.log('Erro ao conectar na sala:', error.message);
-                //await this.leaveRoom();
+                console.error('❌ ERRO:', error);
+            } finally {
+                this.entrou = true;
             }
         },
 

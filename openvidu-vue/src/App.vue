@@ -35,13 +35,15 @@ const remoteTracksMap: Ref<Map<string, TrackInfo>> = ref(new Map());
 
 let participantName = ref('Participant' + Math.floor(Math.random() * 100));
 let roomName = ref('Room');
+let loginToken = '' as String;
 
 onUnmounted(() => {
     leaveRoom();
 });
 
-onMounted(() => {
-    login('admin', 'xlCvppgl2OxMOXsYP9SEtwhpAgPDZNLseVtp2Sd6X1X');
+onMounted(async () => {
+    loginToken = await login('admin', 'xlCvppgl2OxMOXsYP9SEtwhpAgPDZNLseVtp2Sd6X1X');
+    getRooms();
 });
 
 async function joinRoom() {
@@ -126,7 +128,48 @@ async function login(username: string, password: string) {
     }
 
     const data = await response.json();
-    return data.token;
+
+    return data.accessToken;
+}
+
+async function createRoom(roomName: String) {
+    const response = await fetch(APPLICATION_SERVER_URL + 'rooms', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            roomName
+        })
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`Failed to get token: ${error.errorMessage}`);
+    }
+
+    const data = await response.json();
+
+    return data.accessToken;
+}
+
+async function getRooms() {
+    const response = await fetch(APPLICATION_SERVER_URL + 'rooms?maxItems=50', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            authorization: 'Bearer ' + loginToken
+        }
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`Failed to get token: ${error.errorMessage}`);
+    }
+
+    const data = await response.json();
+    console.log(data);
+    return data;
 }
 </script>
 
@@ -155,6 +198,7 @@ async function login(username: string, password: string) {
                     </button>
                 </form>
             </div>
+            <button class="btn btn-lg btn-success" @click="createRoom('room')">Criar sala</button>
         </div>
         <div v-else id="room">
             <div id="room-header">

@@ -24,7 +24,7 @@ let APPLICATION_OPENVIDU_SERVER_URL = '';
 configureUrls();
 
 function configureUrls() {
-    APPLICATION_SERVER_URL = 'https://' + 'hml-openvidu.prontumais.com.br/api/';
+    APPLICATION_SERVER_URL = 'https://' + 'hml-openvidu.prontumais.com.br/internal-api/v1/participants/';
     APPLICATION_OPENVIDU_SERVER_URL = 'https://' + 'hml-openvidu.prontumais.com.br/internal-api/v1/';
     LIVEKIT_URL = 'wss://' + 'hml-openvidu.prontumais.com.br';
 }

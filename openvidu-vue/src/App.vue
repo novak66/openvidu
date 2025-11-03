@@ -109,7 +109,7 @@ async function getToken(roomName: string, participantName: string) {
 }
 
 async function login(username: string, password: string) {
-    const response = await fetch(APPLICATION_SERVER_URL + 'auth/login', {
+    const response = await fetch(APPLICATION_OPENVIDU_SERVER_URL + 'auth/login', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'

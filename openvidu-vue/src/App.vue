@@ -5,7 +5,11 @@ import {
     RemoteTrack,
     RemoteTrackPublication,
     Room,
-    RoomEvent
+    RoomEvent,
+    RemoteVideoTrack,
+    LocalTrack,
+    createLocalVideoTrack,
+    createLocalAudioTrack
 } from 'livekit-client';
 
 import VideoComponent from './components/VideoComponent.vue';
@@ -14,6 +18,7 @@ import AudioComponent from './components/AudioComponent.vue';
 type TrackInfo = {
     trackPublication: RemoteTrackPublication;
     participantIdentity: string;
+    track: LocalTrack | RemoteTrack;
 };
 
 export default {
@@ -67,6 +72,12 @@ export default {
         window.removeEventListener('beforeunload', this.leaveRoom);
     },
 
+    computed: {
+        existsParticipant() {
+            return this.remoteTracksMap?.values()?.length > 0;
+        }
+    },
+
     methods: {
         configureUrls() {
             this.APPLICATION_SERVER_URL = 'https://' + 'hml-openvidu.prontumais.com.br/api/';
@@ -79,7 +90,17 @@ export default {
         async joinRoom() {
             this.room = new Room();
 
-            // LOG TODOS OS EVENTOS
+            this.room.on(
+                RoomEvent.TrackSubscribed,
+                (_track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+                    this.remoteTracksMap.set(publication.trackSid, {
+                        trackPublication: publication,
+                        participantIdentity: participant.identity,
+                        track: _track
+                    });
+                }
+            );
+
             this.room.on(RoomEvent.Connected, () => {
                 console.log('✅ RoomEvent.Connected');
             });
@@ -102,8 +123,29 @@ export default {
 
             this.room.on(RoomEvent.TrackSubscribed, (...args) => {
                 console.log('✅ RoomEvent.TrackSubscribed:', args);
-                // seu código existente
             });
+
+            this.room.on(RoomEvent.TrackUnsubscribed, (_track: RemoteTrack, publication: RemoteTrackPublication) => {
+                console.log('delete');
+                this.remoteTracksMap.delete(publication.trackSid);
+            });
+
+            let videoTrack;
+            let audioTrack;
+
+            try {
+                videoTrack = await createLocalVideoTrack();
+                console.log('✅ Vídeo criado com sucesso');
+            } catch (error) {
+                console.error('❌ Erro ao criar vídeo:', error);
+            }
+
+            try {
+                audioTrack = await createLocalAudioTrack();
+                console.log('✅ Áudio criado com sucesso');
+            } catch (error) {
+                console.error('❌ Erro ao criar áudio:', error);
+            }
 
             try {
                 const token = await this.getToken(this.participantName);
@@ -115,10 +157,23 @@ export default {
                 const iterator = this.room.localParticipant.videoTrackPublications.values();
                 const firstPublication = iterator.next().value;
                 this.localTrack = firstPublication ? firstPublication.videoTrack : undefined;
-            } catch (error: any) {
-                console.error('❌ ERRO:', error);
-            } finally {
+
+                if (videoTrack) {
+                    await this.room.localParticipant.publishTrack(videoTrack);
+
+                    const iterator = this.room.localParticipant.videoTrackPublications.values();
+                    const firstPublication = iterator.next().value;
+                    this.localTrack = firstPublication ? firstPublication.videoTrack : undefined;
+                }
+
+                if (audioTrack) {
+                    await this.room.localParticipant.publishTrack(audioTrack);
+                }
+
                 this.entrou = true;
+            } catch (error: any) {
+                this.leaveRoom();
+                console.error('❌ ERRO:', error);
             }
         },
 
@@ -268,22 +323,16 @@ export default {
                     <button class="btn btn-danger" id="leave-room-button" @click="leaveRoom">Leave Room</button>
                 </div>
                 <div id="layout-container">
-                    <VideoComponent
-                        v-if="localTrack"
-                        :track="localTrack"
-                        :participantIdentity="participantName"
-                        :local="true"
-                    />
+                    <VideoComponent :track="localTrack" :participantIdentity="participantName" :local="true" />
                     <template
                         v-for="remoteTrack of remoteTracksMap.values()"
                         :key="remoteTrack.trackPublication.trackSid"
                     >
                         <VideoComponent
-                            v-if="remoteTrack.trackPublication.kind === 'video'"
-                            :track="remoteTrack.trackPublication.videoTrack!"
+                            :track="remoteTrack.trackPublication.videoTrack"
                             :participantIdentity="remoteTrack.participantIdentity"
                         />
-                        <AudioComponent v-else :track="remoteTrack.trackPublication.audioTrack!" hidden />
+                        <AudioComponent :track="remoteTrack.trackPublication.audioTrack!" hidden />
                     </template>
                 </div>
             </div>

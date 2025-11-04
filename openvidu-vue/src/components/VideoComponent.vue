@@ -1,29 +1,40 @@
-<script setup lang="ts">
+<script lang="ts">
 import { LocalVideoTrack, RemoteVideoTrack } from 'livekit-client';
-import { onMounted, onUnmounted, ref } from 'vue';
 
-const props = withDefaults(
-    defineProps<{
-        track: LocalVideoTrack | RemoteVideoTrack;
-        participantIdentity: string;
-        local?: boolean;
-    }>(),
-    {
-        local: false
+type TrackProps = {
+    track: LocalVideoTrack | RemoteVideoTrack;
+    participantIdentity: string;
+    local?: boolean;
+};
+
+export default {
+    props: {
+        track: {
+            type: Object as () => LocalVideoTrack | RemoteVideoTrack,
+            required: true
+        },
+        participantIdentity: {
+            type: String,
+            required: true
+        },
+        local: {
+            type: Boolean,
+            default: false
+        }
+    },
+
+    mounted() {
+        const videoElement = this.$refs.videoElement as HTMLMediaElement;
+
+        if (videoElement) {
+            this.track.attach(videoElement);
+        }
+    },
+
+    beforeDestroy() {
+        this.track.detach();
     }
-);
-
-const videoElement = ref<HTMLMediaElement | null>(null);
-
-onMounted(() => {
-    if (videoElement.value) {
-        props.track.attach(videoElement.value);
-    }
-});
-
-onUnmounted(() => {
-    props.track.detach();
-});
+};
 </script>
 
 <template>
@@ -31,7 +42,7 @@ onUnmounted(() => {
         <div class="participant-data">
             <p>{{ participantIdentity + (local ? ' (You)' : '') }}</p>
         </div>
-        <video ref="videoElement" :id="track.sid"></video>
+        <video ref="videoElement"></video>
     </div>
 </template>
 

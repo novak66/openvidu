@@ -9,7 +9,7 @@ const audioElement = ref<HTMLMediaElement | null>(null);
 
 onMounted(() => {
     if (audioElement.value) {
-        props.track.attach(audioElement.value);
+        //props.track.attach(audioElement.value);
     }
 });
 
@@ -19,5 +19,5 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <audio ref="audioElement" :id="track.sid"></audio>
+    <audio ref="audioElement"></audio>
 </template>

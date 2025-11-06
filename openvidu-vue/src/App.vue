@@ -9,7 +9,9 @@ import {
     RemoteVideoTrack,
     LocalTrack,
     createLocalVideoTrack,
-    createLocalAudioTrack
+    createLocalAudioTrack,
+    RemoteParticipant,
+    Track
 } from 'livekit-client';
 
 import VideoComponent from './components/VideoComponent.vue';
@@ -32,6 +34,7 @@ export default {
     data() {
         return {
             APPLICATION_SERVER_URL: '',
+            fluxo: 0,
             LIVEKIT_URL: '',
             APPLICATION_OPENVIDU_INTERNAL_SERVER_URL: '',
             APPLICATION_OPENVIDU_V1_SERVER_URL: '',
@@ -43,7 +46,9 @@ export default {
             roomSelected: null as Room | null,
             localTrack: undefined as LocalVideoTrack | undefined,
             remoteTracksMap: new Map<string, TrackInfo>(),
-            entrou: false as Boolean
+            entrou: false as Boolean,
+            microfoneAtivo: false as boolean,
+            cameraAtiva: false as boolean
         };
     },
 
@@ -73,8 +78,28 @@ export default {
     },
 
     computed: {
-        existsParticipant() {
-            return this.remoteTracksMap?.values()?.length > 0;
+        participantsMap() {
+            const participants = new Map();
+
+            this.remoteTracksMap.forEach((trackInfo) => {
+                const identity = trackInfo.participantIdentity;
+
+                if (!participants.has(identity)) {
+                    participants.set(identity, {
+                        identity: identity,
+                        videoTrack: null,
+                        audioTrack: null
+                    });
+                }
+
+                const participant = participants.get(identity);
+                if (trackInfo.track.kind === 'video') {
+                    participant.videoTrack = trackInfo.track;
+                } else if (trackInfo.track.kind === 'audio') {
+                    participant.audioTrack = trackInfo.track;
+                }
+            });
+            return participants;
         }
     },
 
@@ -102,7 +127,7 @@ export default {
             );
 
             this.room.on(RoomEvent.Connected, () => {
-                console.log('✅ RoomEvent.Connected');
+                //console.log('✅ RoomEvent.Connected');
             });
 
             this.room.on(RoomEvent.Disconnected, (reason) => {
@@ -110,67 +135,79 @@ export default {
             });
 
             this.room.on(RoomEvent.Reconnecting, () => {
-                console.warn('🔄 RoomEvent.Reconnecting');
+                // console.warn('🔄 RoomEvent.Reconnecting');
             });
 
             this.room.on(RoomEvent.Reconnected, () => {
-                console.log('✅ RoomEvent.Reconnected');
+                // console.log('✅ RoomEvent.Reconnected');
             });
 
             this.room.on(RoomEvent.SignalConnected, () => {
-                console.log('✅ RoomEvent.SignalConnected - WebSocket conectado!');
+                // console.log('✅ RoomEvent.SignalConnected - WebSocket conectado!');
             });
 
             this.room.on(RoomEvent.TrackSubscribed, (...args) => {
-                console.log('✅ RoomEvent.TrackSubscribed:', args);
+                //  console.log('✅ RoomEvent.TrackSubscribed:', args);
             });
 
-            this.room.on(RoomEvent.TrackUnsubscribed, (_track: RemoteTrack, publication: RemoteTrackPublication) => {
-                console.log('delete');
-                this.remoteTracksMap.delete(publication.trackSid);
+            this.room.on(RoomEvent.ParticipantConnected, () => {
+                //  console.log('moreParticipants');
+                //this.connectingParticipants();
+            });
+            this.room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
+                console.log('Participante desconectou:', participant.identity);
+
+                this.remoteTracksMap.forEach((trackInfo, trackSid) => {
+                    if (trackInfo.participantIdentity === participant.identity) {
+                        this.remoteTracksMap.delete(trackSid);
+                        console.log('Track removida:', trackSid);
+                    }
+                });
             });
 
-            let videoTrack;
-            let audioTrack;
+            this.connectingParticipants();
 
+            this.room.on(RoomEvent.Connected, () => {
+                //  console.log('✅ RoomEvent.Connected');
+            });
+        },
+
+        async connectingParticipants() {
             try {
-                videoTrack = await createLocalVideoTrack();
+                this.localVideoTrack = await createLocalVideoTrack();
                 console.log('✅ Vídeo criado com sucesso');
             } catch (error) {
                 console.error('❌ Erro ao criar vídeo:', error);
             }
 
             try {
-                audioTrack = await createLocalAudioTrack();
+                this.localAudioTrack = await createLocalAudioTrack();
                 console.log('✅ Áudio criado com sucesso');
             } catch (error) {
                 console.error('❌ Erro ao criar áudio:', error);
             }
 
             try {
-                const token = await this.getToken(this.participantName);
-                console.log('🔑 Token obtido');
+                if (this.room) {
+                    const token = await this.getToken(this.participantName);
+                    console.log('🔑 Token obtido');
 
-                await this.room.connect(this.LIVEKIT_URL, token);
-                console.log('✅ room.connect() completou, state:', this.room.state);
+                    await this.room.connect(this.LIVEKIT_URL, token);
+                    console.log('✅ room.connect() completou, state:', this.room.state);
 
-                const iterator = this.room.localParticipant.videoTrackPublications.values();
-                const firstPublication = iterator.next().value;
-                this.localTrack = firstPublication ? firstPublication.videoTrack : undefined;
+                    if (this.localVideoTrack) {
+                        await this.room.localParticipant.publishTrack(this.localVideoTrack);
+                        this.localTrack = this.localVideoTrack; // ✅ Usa diretamente
+                    }
 
-                if (videoTrack) {
-                    await this.room.localParticipant.publishTrack(videoTrack);
+                    if (this.localAudioTrack) {
+                        await this.room.localParticipant.publishTrack(this.localAudioTrack);
+                    }
 
-                    const iterator = this.room.localParticipant.videoTrackPublications.values();
-                    const firstPublication = iterator.next().value;
-                    this.localTrack = firstPublication ? firstPublication.videoTrack : undefined;
+                    this.entrou = true;
+                    this.microfoneAtivo = true; // ✅ Estado inicial
+                    this.cameraAtiva = true; // ✅ Estado inicial
                 }
-
-                if (audioTrack) {
-                    await this.room.localParticipant.publishTrack(audioTrack);
-                }
-
-                this.entrou = true;
             } catch (error: any) {
                 this.leaveRoom();
                 console.error('❌ ERRO:', error);
@@ -178,6 +215,8 @@ export default {
         },
 
         async leaveRoom() {
+            this.fluxo = 0;
+            this.roomSelected = null;
             if (this.room) {
                 await this.room.disconnect();
             }
@@ -185,6 +224,45 @@ export default {
             this.room = undefined;
             this.localTrack = undefined;
             this.remoteTracksMap.clear();
+        },
+
+        async mutarDesmutar() {
+            if (!this.room) return;
+
+            // Verifica se já tem uma track de áudio publicada
+            const audioTrack = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
+
+            if (audioTrack && audioTrack.track) {
+                // Se a track existe, só muta/desmuta
+                if (audioTrack.isMuted) {
+                    await audioTrack.track.unmute();
+                    this.microfoneAtivo = true;
+                    console.log('🎤 Microfone ligado');
+                } else {
+                    await audioTrack.track.mute();
+                    this.microfoneAtivo = false;
+                    console.log('🔇 Microfone desligado');
+                }
+            } else {
+                console.warn('⚠️ Nenhuma track de áudio publicada');
+            }
+        },
+
+        async changeCamera() {
+            if (!this.localVideoTrack) {
+                console.warn('⚠️ Track de vídeo não disponível');
+                return;
+            }
+
+            if (this.cameraAtiva) {
+                await this.localVideoTrack.mute();
+                this.cameraAtiva = false;
+                console.log('📷 Câmera desligada');
+            } else {
+                await this.localVideoTrack.unmute();
+                this.cameraAtiva = true;
+                console.log('📹 Câmera ligada');
+            }
         },
 
         async config(): Promise<string> {
@@ -206,12 +284,16 @@ export default {
 
         async getToken(participantName: string): Promise<string> {
             const select = this.roomSelected;
+
+            const u = new URL(select?.moderatorUrl);
+            const secret = u.searchParams.get('secret');
+            console.log(secret);
             const response = await fetch(this.APPLICATION_OPENVIDU_INTERNAL_SERVER_URL + 'participants/token', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ roomId: select?.roomId, participantName, secret: '975734f820' })
+                body: JSON.stringify({ roomId: select?.roomId, participantName, secret })
             });
 
             if (!response.ok) {
@@ -254,6 +336,12 @@ export default {
             return await response.json();
         },
 
+        convertData(date: number) {
+            const d = new Date(date);
+
+            return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        },
+
         async getRooms(): Promise<Room[]> {
             const response = await fetch(this.APPLICATION_OPENVIDU_V1_SERVER_URL + 'rooms?maxItems=50', {
                 method: 'GET',
@@ -277,63 +365,168 @@ export default {
 
 <template>
     <div>
-        <div style="width: 100%" v-if="roomSelected == null">
-            <div style="display: flex; align-items: center" v-for="r in rooms">
-                <div>{{ r.roomName }}</div>
-                <button class="btn btn-lg" @click="roomSelected = r">Entrar na sala</button>
+        <div style="display: flex; justify-content: space-around" v-if="fluxo == 0">
+            <div
+                style="width: 45%; border: 1px solid rgba(0, 0, 0, 0.2); display: flex; justify-content: center"
+                v-for="r in rooms"
+            >
+                <div
+                    style="
+                        width: 100%;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: flex-start;
+                        align-items: flex-start;
+                        gap: 8px;
+                    "
+                >
+                    <div
+                        style="
+                            width: 100%;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: flex-start;
+                            align-items: flex-start;
+                            background: #f7fafc;
+                            padding: 30px;
+                        "
+                    >
+                        <div style="width: 100%; display: flex; justify-content: space-between; align-items: center">
+                            <h1
+                                style="
+                                    font-size: 18px;
+                                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                    width: 40px;
+                                    height: 40px;
+                                    display: flex;
+                                    justify-content: center;
+                                    align-items: center;
+                                    border-radius: 12px;
+                                "
+                            >
+                                📹
+                            </h1>
+                            <div
+                                style="
+                                    background: #d1fae5;
+                                    color: #065f46;
+                                    border-radius: 20px;
+                                    width: 80px;
+                                    height: 30px;
+                                    display: flex;
+                                    padding: 10px;
+                                    justify-content: space-between;
+                                    align-items: center;
+                                "
+                                v-if="r.status === 'open'"
+                            >
+                                <span style="background: #10b981; width: 8px; height: 8px; border-radius: 50%"></span>
+                                <div style="margin-bottom: 4px">Aberta</div>
+                            </div>
+                            <div
+                                v-else
+                                style="
+                                    background: #42a5f5;
+                                    color: #1976d2;
+                                    border-radius: 20px;
+                                    width: fit-content;
+                                    height: 30px;
+                                    display: flex;
+                                    padding: 10px;
+                                    gap: 10px;
+                                    justify-content: space-between;
+                                    align-items: center;
+                                "
+                            >
+                                <span style="background: #1565c0; width: 8px; height: 8px; border-radius: 50%"></span>
+                                <div style="margin-bottom: 4px">Reunião em andamento</div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3>
+                                {{ r.roomName }}
+                            </h3>
+                        </div>
+                    </div>
+                    <div style="padding: 20px; color: #a0aec0; font-size: 13px">
+                        {{ convertData(r.creationDate) }}
+                    </div>
+                    <div style="display: flex; justify-content: center; width: 100%">
+                        <button
+                            style="
+                                width: 80%;
+                                margin-bottom: 30px;
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                border: none;
+                                border-radius: 10px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                padding: 16px;
+                                color: white;
+                            "
+                            @click="((roomSelected = r), (fluxo = 1))"
+                        >
+                            Entrar na sala
+                        </button>
+                    </div>
+                </div>
             </div>
-            <button class="btn btn-lg btn-success" @click="createRoom('room')">Criar sala</button>
         </div>
         <div v-else>
-            <div v-if="!entrou" id="join">
-                <div id="join-dialog">
-                    <h2>Join a Video Room</h2>
-                    <div>
-                        <label for="participant-name">Participant</label>
-                        <input
-                            v-model="participantName"
-                            id="participant-name"
-                            class="form-control"
-                            type="text"
-                            required
-                        />
+            <div>
+                <div v-if="!entrou" id="join">
+                    <div id="join-dialog">
+                        <h2>Join a Video Room</h2>
+                        <div>
+                            <label for="participant-name">Participant</label>
+                            <input
+                                v-model="participantName"
+                                id="participant-name"
+                                class="form-control"
+                                type="text"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label for="room-name">Room</label>
+                            <input
+                                v-model="roomSelected.roomName"
+                                id="room-name"
+                                class="form-control"
+                                type="text"
+                                disabled
+                            />
+                        </div>
+                        <button
+                            class="btn btn-lg btn-success"
+                            @click="joinRoom()"
+                            :disabled="!roomName || !participantName"
+                        >
+                            Join!
+                        </button>
                     </div>
-                    <div>
-                        <label for="room-name">Room</label>
-                        <input
-                            v-model="roomSelected.roomName"
-                            id="room-name"
-                            class="form-control"
-                            type="text"
-                            disabled
-                        />
+                </div>
+                <div v-else id="room">
+                    <div id="room-header">
+                        <h2 id="room-title">{{ roomName }}</h2>
+                        <button class="btn btn-danger" id="leave-room-button" @click="leaveRoom">Leave Room</button>
                     </div>
-                    <button
-                        class="btn btn-lg btn-success"
-                        @click="joinRoom()"
-                        :disabled="!roomName || !participantName"
-                    >
-                        Join!
-                    </button>
-                </div>
-            </div>
-            <div v-else id="room">
-                <div id="room-header">
-                    <h2 id="room-title">{{ roomName }}</h2>
-                    <button class="btn btn-danger" id="leave-room-button" @click="leaveRoom">Leave Room</button>
-                </div>
-                <div id="layout-container">
-                    <VideoComponent :track="localTrack" :participantIdentity="participantName" :local="true" />
-                    <template
-                        v-for="remoteTrack of remoteTracksMap.values()"
-                        :key="remoteTrack.trackPublication.trackSid"
-                    >
+                    <div id="layout-container">
                         <VideoComponent
-                            :track="remoteTrack.trackPublication.videoTrack"
-                            :participantIdentity="remoteTrack.participantIdentity"
+                            :track="localTrack"
+                            :participantIdentity="participantName"
+                            :local="true"
+                            @change-camera="changeCamera()"
+                            @change-microphone="mutarDesmutar()"
                         />
-                        <AudioComponent :track="remoteTrack.trackPublication.audioTrack!" hidden />
-                    </template>
+                        <template v-for="participant of participantsMap.values()" :key="participant.identity">
+                            <VideoComponent
+                                :track="participant.videoTrack"
+                                :participantIdentity="participant.identity"
+                            />
+                            <AudioComponent v-if="participant.audioTrack" :track="participant.audioTrack" hidden />
+                        </template>
+                    </div>
                 </div>
             </div>
         </div>

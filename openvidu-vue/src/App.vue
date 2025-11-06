@@ -174,6 +174,21 @@ export default {
 
         async connectingParticipants() {
             try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+
+                // Para o stream temporário depois de obter permissões
+                stream.getTracks().forEach((track) => track.stop());
+
+                console.log('✅ Permissões concedidas');
+            } catch (error) {
+                console.error('❌ Permissões negadas:', error);
+            }
+
+            // ✅ PASSO 2: Criar as tracks do LiveKit
+            try {
                 this.localVideoTrack = await createLocalVideoTrack();
                 console.log('✅ Vídeo criado com sucesso');
             } catch (error) {
@@ -187,26 +202,27 @@ export default {
                 console.error('❌ Erro ao criar áudio:', error);
             }
 
+            // ✅ PASSO 3: Conectar e publicar
             try {
                 if (this.room) {
                     const token = await this.getToken(this.participantName);
                     console.log('🔑 Token obtido');
 
                     await this.room.connect(this.LIVEKIT_URL, token);
-                    console.log('✅ room.connect() completou, state:', this.room.state);
+                    console.log('✅ room.connect() completou');
 
                     if (this.localVideoTrack) {
                         await this.room.localParticipant.publishTrack(this.localVideoTrack);
-                        this.localTrack = this.localVideoTrack; // ✅ Usa diretamente
+                        this.localTrack = this.localVideoTrack;
+                        this.cameraAtiva = true;
                     }
 
                     if (this.localAudioTrack) {
                         await this.room.localParticipant.publishTrack(this.localAudioTrack);
+                        this.microfoneAtivo = true;
                     }
 
                     this.entrou = true;
-                    this.microfoneAtivo = true; // ✅ Estado inicial
-                    this.cameraAtiva = true; // ✅ Estado inicial
                 }
             } catch (error: any) {
                 this.leaveRoom();
@@ -236,10 +252,12 @@ export default {
                 // Se a track existe, só muta/desmuta
                 if (audioTrack.isMuted) {
                     await audioTrack.track.unmute();
+
                     this.microfoneAtivo = true;
                     console.log('🎤 Microfone ligado');
                 } else {
                     await audioTrack.track.mute();
+
                     this.microfoneAtivo = false;
                     console.log('🔇 Microfone desligado');
                 }
@@ -516,6 +534,8 @@ export default {
                             :track="localTrack"
                             :participantIdentity="participantName"
                             :local="true"
+                            :audio="microfoneAtivo"
+                            :video="cameraAtiva"
                             @change-camera="changeCamera()"
                             @change-microphone="mutarDesmutar()"
                         />

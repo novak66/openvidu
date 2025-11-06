@@ -48,7 +48,8 @@ export default {
             remoteTracksMap: new Map<string, TrackInfo>(),
             entrou: false as Boolean,
             microfoneAtivo: false as boolean,
-            cameraAtiva: false as boolean
+            cameraAtiva: false as boolean,
+            alreadyConnected: false
         };
     },
 
@@ -69,12 +70,12 @@ export default {
                 console.error('Erro ao iniciar:', error);
             });
 
-        window.addEventListener('beforeunload', this.leaveRoom);
+        window.addEventListener('beforeunload', this.leaveRoom());
     },
 
     beforeDestroy() {
         this.leaveRoom();
-        window.removeEventListener('beforeunload', this.leaveRoom);
+        window.removeEventListener('beforeunload', this.leaveRoom());
     },
 
     computed: {
@@ -173,36 +174,43 @@ export default {
         },
 
         async connectingParticipants() {
+            if (this.alreadyConnected) {
+                console.warn('⚠️ Já conectado, ignorando chamada duplicada');
+                return;
+            }
+
+            console.log('🔵 Iniciando connectingParticipants...');
+
+            // ✅ PASSO 1: Pedir permissões
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: true,
                     audio: true
                 });
-
-                // Para o stream temporário depois de obter permissões
                 stream.getTracks().forEach((track) => track.stop());
-
                 console.log('✅ Permissões concedidas');
             } catch (error) {
                 console.error('❌ Permissões negadas:', error);
             }
 
-            // ✅ PASSO 2: Criar as tracks do LiveKit
+            // ✅ PASSO 2: Criar tracks
             try {
                 this.localVideoTrack = await createLocalVideoTrack();
-                console.log('✅ Vídeo criado com sucesso');
+                console.log('✅ Vídeo criado');
             } catch (error) {
                 console.error('❌ Erro ao criar vídeo:', error);
             }
 
             try {
                 this.localAudioTrack = await createLocalAudioTrack();
-                console.log('✅ Áudio criado com sucesso');
+                console.log('✅ Áudio criado');
+                console.log('🎤 Áudio mediaStreamTrack:', this.localAudioTrack?.mediaStreamTrack);
+                console.log('🎤 Áudio enabled:', this.localAudioTrack?.mediaStreamTrack?.enabled);
             } catch (error) {
                 console.error('❌ Erro ao criar áudio:', error);
             }
 
-            // ✅ PASSO 3: Conectar e publicar
+            // ✅ PASSO 3: Conectar e publicar (UMA VEZ SÓ!)
             try {
                 if (this.room) {
                     const token = await this.getToken(this.participantName);
@@ -215,23 +223,37 @@ export default {
                         await this.room.localParticipant.publishTrack(this.localVideoTrack);
                         this.localTrack = this.localVideoTrack;
                         this.cameraAtiva = true;
+                        console.log('✅ Vídeo publicado');
                     }
 
                     if (this.localAudioTrack) {
+                        console.log('📤 Publicando áudio...');
                         await this.room.localParticipant.publishTrack(this.localAudioTrack);
                         this.microfoneAtivo = true;
+                        console.log('✅ Áudio publicado');
                     }
 
                     this.entrou = true;
+
+                    // Debug: Lista tracks publicadas
+                    console.log('📋 Tracks locais publicadas:');
+                    this.room.localParticipant.trackPublications.forEach((pub, sid) => {
+                        console.log(`  - ${pub.kind}: ${sid}`);
+                    });
                 }
             } catch (error: any) {
-                this.leaveRoom();
                 console.error('❌ ERRO:', error);
+                this.leaveRoom();
             }
+
+            // ✅ Marca como conectado
+            this.alreadyConnected = true;
         },
 
         async leaveRoom() {
             this.fluxo = 0;
+            this.entrou = false;
+            this.alreadyConnected = false;
             this.roomSelected = null;
             if (this.room) {
                 await this.room.disconnect();
@@ -527,7 +549,7 @@ export default {
                 <div v-else id="room">
                     <div id="room-header">
                         <h2 id="room-title">{{ roomName }}</h2>
-                        <button class="btn btn-danger" id="leave-room-button" @click="leaveRoom">Leave Room</button>
+                        <button class="btn btn-danger" id="leave-room-button" @click="leaveRoom()">Leave Room</button>
                     </div>
                     <div id="layout-container">
                         <VideoComponent

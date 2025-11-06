@@ -49,7 +49,8 @@ export default {
             entrou: false as Boolean,
             microfoneAtivo: false as boolean,
             cameraAtiva: false as boolean,
-            alreadyConnected: false
+            alreadyConnected: false,
+            newRoomName: '' as string
         };
     },
 
@@ -92,17 +93,22 @@ export default {
                     participants.set(identity, {
                         identity: identity,
                         videoTrack: null,
-                        audioTrack: null
+                        audioTrack: null,
+                        isCameraMuted: true,
+                        isMicMuted: true
                     });
                 }
 
                 const participant = participants.get(identity);
                 if (trackInfo.track.kind === 'video') {
                     participant.videoTrack = trackInfo.track;
+                    participant.isCameraMuted = trackInfo.track.isMuted; // ✅ Verifica se está mutado
                 } else if (trackInfo.track.kind === 'audio') {
                     participant.audioTrack = trackInfo.track;
+                    participant.isMicMuted = trackInfo.track.isMuted; // ✅ Verifica se está mutado
                 }
             });
+
             return participants;
         }
     },
@@ -435,19 +441,21 @@ export default {
             return data.accessToken;
         },
 
-        async createRoom(roomName: string): Promise<any> {
-            const response = await fetch(this.APPLICATION_SERVER_URL + 'rooms', {
+        async createRoom(): Promise<any> {
+            const response = await fetch(this.APPLICATION_OPENVIDU_V1_SERVER_URL + 'rooms', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ roomName })
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + this.loginToken },
+                body: JSON.stringify({ roomName: this.newRoomName })
             });
 
             if (!response.ok) {
                 const error = await response.json();
                 throw new Error(`Falha ao criar sala: ${error.errorMessage}`);
             }
+            this.newRoomName = '';
 
-            return await response.json();
+            await response.json();
+            this.rooms = await this.getRooms();
         },
 
         convertData(date: number) {
@@ -479,20 +487,53 @@ export default {
 
 <template>
     <div>
-        <div style="display: flex; justify-content: space-around" v-if="fluxo == 0">
-            <div
-                style="width: 45%; border: 1px solid rgba(0, 0, 0, 0.2); display: flex; justify-content: center"
-                v-for="r in rooms"
-            >
+        <div style="display: flex; flex-direction: column" v-if="fluxo == 0">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 24px">
+                <input
+                    v-model="newRoomName"
+                    type="text"
+                    placeholder="Nome da sala"
+                    style="
+                        padding: 8px 14px;
+                        border: 1px solid #ccc;
+                        border-radius: 10px;
+                        font-size: 14px;
+                        width: 240px;
+                        transition: all 0.2s ease;
+                        outline: none;
+                    "
+                    onfocus="this.style.borderColor='#6b73ff'; this.style.boxShadow='0 0 0 2px rgba(107,115,255,0.2)'"
+                    onblur="this.style.borderColor='#ccc'; this.style.boxShadow='none'"
+                />
+                <button
+                    style="
+                        background: linear-gradient(90deg, #6b73ff, #8b63ff);
+                        color: white;
+                        font-weight: 600;
+                        padding: 8px 18px;
+                        border: none;
+                        border-radius: 10px;
+                        cursor: pointer;
+                        transition: opacity 0.2s ease;
+                    "
+                    onmouseover="this.style.opacity='0.9'"
+                    onmouseout="this.style.opacity='1'"
+                    @click="createRoom()"
+                >
+                    Criar sala
+                </button>
+            </div>
+
+            <div style="display: flex; justify-content: space-around; flex-wrap: wrap">
                 <div
                     style="
-                        width: 100%;
+                        width: 32%;
+                        border: 1px solid rgba(0, 0, 0, 0.2);
                         display: flex;
-                        flex-direction: column;
-                        justify-content: flex-start;
-                        align-items: flex-start;
-                        gap: 8px;
+                        justify-content: center;
+                        margin-bottom: 10px;
                     "
+                    v-for="r in rooms"
                 >
                     <div
                         style="
@@ -501,87 +542,104 @@ export default {
                             flex-direction: column;
                             justify-content: flex-start;
                             align-items: flex-start;
-                            background: #f7fafc;
-                            padding: 30px;
+                            gap: 8px;
                         "
                     >
-                        <div style="width: 100%; display: flex; justify-content: space-between; align-items: center">
-                            <h1
-                                style="
-                                    font-size: 18px;
-                                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                                    width: 40px;
-                                    height: 40px;
-                                    display: flex;
-                                    justify-content: center;
-                                    align-items: center;
-                                    border-radius: 12px;
-                                "
-                            >
-                                📹
-                            </h1>
-                            <div
-                                style="
-                                    background: #d1fae5;
-                                    color: #065f46;
-                                    border-radius: 20px;
-                                    width: 80px;
-                                    height: 30px;
-                                    display: flex;
-                                    padding: 10px;
-                                    justify-content: space-between;
-                                    align-items: center;
-                                "
-                                v-if="r.status === 'open'"
-                            >
-                                <span style="background: #10b981; width: 8px; height: 8px; border-radius: 50%"></span>
-                                <div style="margin-bottom: 4px">Aberta</div>
-                            </div>
-                            <div
-                                v-else
-                                style="
-                                    background: #42a5f5;
-                                    color: #1976d2;
-                                    border-radius: 20px;
-                                    width: fit-content;
-                                    height: 30px;
-                                    display: flex;
-                                    padding: 10px;
-                                    gap: 10px;
-                                    justify-content: space-between;
-                                    align-items: center;
-                                "
-                            >
-                                <span style="background: #1565c0; width: 8px; height: 8px; border-radius: 50%"></span>
-                                <div style="margin-bottom: 4px">Reunião em andamento</div>
-                            </div>
-                        </div>
-                        <div>
-                            <h3>
-                                {{ r.roomName }}
-                            </h3>
-                        </div>
-                    </div>
-                    <div style="padding: 20px; color: #a0aec0; font-size: 13px">
-                        {{ convertData(r.creationDate) }}
-                    </div>
-                    <div style="display: flex; justify-content: center; width: 100%">
-                        <button
+                        <div
                             style="
-                                width: 80%;
-                                margin-bottom: 30px;
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                                border: none;
-                                border-radius: 10px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                padding: 16px;
-                                color: white;
+                                width: 100%;
+                                display: flex;
+                                flex-direction: column;
+                                justify-content: flex-start;
+                                align-items: flex-start;
+                                background: #f7fafc;
+                                padding: 30px;
                             "
-                            @click="((roomSelected = r), (fluxo = 1))"
                         >
-                            Entrar na sala
-                        </button>
+                            <div
+                                style="width: 100%; display: flex; justify-content: space-between; align-items: center"
+                            >
+                                <h1
+                                    style="
+                                        font-size: 18px;
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        width: 40px;
+                                        height: 40px;
+                                        display: flex;
+                                        justify-content: center;
+                                        align-items: center;
+                                        border-radius: 12px;
+                                    "
+                                >
+                                    📹
+                                </h1>
+                                <div
+                                    style="
+                                        background: #d1fae5;
+                                        color: #065f46;
+                                        border-radius: 20px;
+                                        width: 80px;
+                                        height: 30px;
+                                        display: flex;
+                                        padding: 10px;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                    "
+                                    v-if="r.status === 'open'"
+                                >
+                                    <span
+                                        style="background: #10b981; width: 8px; height: 8px; border-radius: 50%"
+                                    ></span>
+                                    <div style="margin-bottom: 4px">Aberta</div>
+                                </div>
+                                <div
+                                    v-else
+                                    style="
+                                        background: #42a5f5;
+                                        color: #1976d2;
+                                        border-radius: 20px;
+                                        width: fit-content;
+                                        height: 30px;
+                                        display: flex;
+                                        padding: 10px;
+                                        gap: 10px;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                    "
+                                >
+                                    <span
+                                        style="background: #1565c0; width: 8px; height: 8px; border-radius: 50%"
+                                    ></span>
+                                    <div style="margin-bottom: 4px">Reunião em andamento</div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3>
+                                    {{ r.roomName }}
+                                </h3>
+                            </div>
+                        </div>
+                        <div style="padding: 20px; color: #a0aec0; font-size: 13px">
+                            {{ convertData(r.creationDate) }}
+                        </div>
+                        <div style="display: flex; justify-content: center; width: 100%">
+                            <button
+                                style="
+                                    width: 80%;
+                                    margin-bottom: 30px;
+                                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                    border: none;
+                                    border-radius: 10px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    padding: 16px;
+                                    color: white;
+                                "
+                                @click="((roomSelected = r), (fluxo = 1))"
+                            >
+                                Entrar na sala
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -71,6 +71,9 @@ export default {
             });
 
         window.addEventListener('beforeunload', this.leaveRoom());
+
+        window.testMic = () => this.testMicrophoneLevel();
+        window.checkAudio = () => this.checkRemoteAudio();
     },
 
     beforeDestroy() {
@@ -173,6 +176,68 @@ export default {
             });
         },
 
+        testMicrophoneLevel() {
+            console.log('🔵 Testando microfone...');
+
+            if (!this.localAudioTrack) {
+                console.error('❌ Sem track de áudio');
+                return;
+            }
+
+            const mediaStreamTrack = this.localAudioTrack.mediaStreamTrack;
+            if (!mediaStreamTrack) {
+                console.error('❌ Sem mediaStreamTrack');
+                return;
+            }
+
+            const stream = new MediaStream([mediaStreamTrack]);
+            const audioContext = new AudioContext();
+            const analyser = audioContext.createAnalyser();
+            const microphone = audioContext.createMediaStreamSource(stream);
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            microphone.connect(analyser);
+
+            console.log('🎤 FALE NO MICROFONE AGORA! Testando por 6 segundos...');
+
+            let checkCount = 0;
+            const interval = setInterval(() => {
+                analyser.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                const rounded = Math.round(average);
+                console.log(`🎤 Volume: ${rounded} ${rounded > 5 ? '📢 CAPTANDO!' : '🔇 silêncio'}`);
+
+                checkCount++;
+                if (checkCount >= 30) {
+                    clearInterval(interval);
+                    audioContext.close();
+                    console.log('✅ Teste concluído');
+                }
+            }, 200);
+        },
+
+        checkRemoteAudio() {
+            console.log('=== VERIFICANDO ÁUDIO REMOTO ===');
+            if (!this.room) {
+                console.error('❌ Não está em uma sala');
+                return;
+            }
+
+            this.room.remoteParticipants.forEach((participant) => {
+                console.log('👤 Participante:', participant.identity);
+                participant.audioTrackPublications.forEach((pub) => {
+                    console.log('  📢 Track de áudio:', {
+                        sid: pub.trackSid,
+                        isMuted: pub.isMuted,
+                        isSubscribed: pub.isSubscribed,
+                        hasTrack: !!pub.track,
+                        trackEnabled: pub.track?.mediaStreamTrack?.enabled,
+                        trackReadyState: pub.track?.mediaStreamTrack?.readyState
+                    });
+                });
+            });
+        },
+
         async connectingParticipants() {
             if (this.alreadyConnected) {
                 console.warn('⚠️ Já conectado, ignorando chamada duplicada');
@@ -231,6 +296,15 @@ export default {
                         await this.room.localParticipant.publishTrack(this.localAudioTrack);
                         this.microfoneAtivo = true;
                         console.log('✅ Áudio publicado');
+                        console.log('🔍 Verificando estado do áudio:');
+                        console.log('  - isMuted:', this.localAudioTrack.isMuted);
+                        console.log('  - isEnabled:', this.localAudioTrack.isEnabled);
+                        console.log('  - mediaStreamTrack.enabled:', this.localAudioTrack.mediaStreamTrack?.enabled);
+                        console.log('  - mediaStreamTrack.muted:', this.localAudioTrack.mediaStreamTrack?.muted);
+                        console.log(
+                            '  - mediaStreamTrack.readyState:',
+                            this.localAudioTrack.mediaStreamTrack?.readyState
+                        );
                     }
 
                     this.entrou = true;

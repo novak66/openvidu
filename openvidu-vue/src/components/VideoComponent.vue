@@ -64,14 +64,12 @@ export default defineComponent({
 
             try {
                 this.track.attach(videoElement);
-                console.log('✅ Vídeo anexado:', this.participantIdentity);
             } catch (error) {
                 console.error('❌ Erro ao anexar vídeo:', error);
             }
         },
 
         handleCameraClick() {
-            console.log('🔵 Clique detectado no VideoComponent');
             this.$emit('change-camera');
         }
     },

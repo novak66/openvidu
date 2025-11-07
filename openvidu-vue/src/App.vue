@@ -72,9 +72,6 @@ export default {
             });
 
         window.addEventListener('beforeunload', this.leaveRoom());
-
-        window.testMic = () => this.testMicrophoneLevel();
-        window.checkAudio = () => this.checkRemoteAudio();
     },
 
     beforeDestroy() {
@@ -141,7 +138,7 @@ export default {
             });
 
             this.room.on(RoomEvent.Disconnected, (reason) => {
-                console.error('❌ RoomEvent.Disconnected:', reason);
+                //console.error('❌ RoomEvent.Disconnected:', reason);
             });
 
             this.room.on(RoomEvent.Reconnecting, () => {
@@ -165,12 +162,9 @@ export default {
                 //this.connectingParticipants();
             });
             this.room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
-                console.log('Participante desconectou:', participant.identity);
-
                 this.remoteTracksMap.forEach((trackInfo, trackSid) => {
                     if (trackInfo.participantIdentity === participant.identity) {
                         this.remoteTracksMap.delete(trackSid);
-                        console.log('Track removida:', trackSid);
                     }
                 });
             });
@@ -182,141 +176,51 @@ export default {
             });
         },
 
-        testMicrophoneLevel() {
-            console.log('🔵 Testando microfone...');
-
-            if (!this.localAudioTrack) {
-                console.error('❌ Sem track de áudio');
-                return;
-            }
-
-            const mediaStreamTrack = this.localAudioTrack.mediaStreamTrack;
-            if (!mediaStreamTrack) {
-                console.error('❌ Sem mediaStreamTrack');
-                return;
-            }
-
-            const stream = new MediaStream([mediaStreamTrack]);
-            const audioContext = new AudioContext();
-            const analyser = audioContext.createAnalyser();
-            const microphone = audioContext.createMediaStreamSource(stream);
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-            microphone.connect(analyser);
-
-            console.log('🎤 FALE NO MICROFONE AGORA! Testando por 6 segundos...');
-
-            let checkCount = 0;
-            const interval = setInterval(() => {
-                analyser.getByteFrequencyData(dataArray);
-                const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-                const rounded = Math.round(average);
-                console.log(`🎤 Volume: ${rounded} ${rounded > 5 ? '📢 CAPTANDO!' : '🔇 silêncio'}`);
-
-                checkCount++;
-                if (checkCount >= 30) {
-                    clearInterval(interval);
-                    audioContext.close();
-                    console.log('✅ Teste concluído');
-                }
-            }, 200);
-        },
-
-        checkRemoteAudio() {
-            console.log('=== VERIFICANDO ÁUDIO REMOTO ===');
-            if (!this.room) {
-                console.error('❌ Não está em uma sala');
-                return;
-            }
-
-            this.room.remoteParticipants.forEach((participant) => {
-                console.log('👤 Participante:', participant.identity);
-                participant.audioTrackPublications.forEach((pub) => {
-                    console.log('  📢 Track de áudio:', {
-                        sid: pub.trackSid,
-                        isMuted: pub.isMuted,
-                        isSubscribed: pub.isSubscribed,
-                        hasTrack: !!pub.track,
-                        trackEnabled: pub.track?.mediaStreamTrack?.enabled,
-                        trackReadyState: pub.track?.mediaStreamTrack?.readyState
-                    });
-                });
-            });
-        },
-
         async connectingParticipants() {
             if (this.alreadyConnected) {
-                console.warn('⚠️ Já conectado, ignorando chamada duplicada');
                 return;
             }
 
-            console.log('🔵 Iniciando connectingParticipants...');
-
-            // ✅ PASSO 1: Pedir permissões
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: true,
                     audio: true
                 });
                 stream.getTracks().forEach((track) => track.stop());
-                console.log('✅ Permissões concedidas');
             } catch (error) {
                 console.error('❌ Permissões negadas:', error);
             }
 
-            // ✅ PASSO 2: Criar tracks
             try {
                 this.localVideoTrack = await createLocalVideoTrack();
-                console.log('✅ Vídeo criado');
             } catch (error) {
                 console.error('❌ Erro ao criar vídeo:', error);
             }
 
             try {
                 this.localAudioTrack = await createLocalAudioTrack();
-                console.log('✅ Áudio criado');
-                console.log('🎤 Áudio mediaStreamTrack:', this.localAudioTrack?.mediaStreamTrack);
-                console.log('🎤 Áudio enabled:', this.localAudioTrack?.mediaStreamTrack?.enabled);
             } catch (error) {
                 console.error('❌ Erro ao criar áudio:', error);
             }
 
-            // ✅ PASSO 3: Conectar e publicar (UMA VEZ SÓ!)
             try {
                 if (this.room) {
                     const token = await this.getToken(this.participantName);
-                    console.log('🔑 Token obtido');
-
                     await this.room.connect(this.LIVEKIT_URL, token);
-                    console.log('✅ room.connect() completou');
 
                     if (this.localVideoTrack) {
                         await this.room.localParticipant.publishTrack(this.localVideoTrack);
                         this.localTrack = this.localVideoTrack;
                         this.cameraAtiva = true;
-                        console.log('✅ Vídeo publicado');
                     }
 
                     if (this.localAudioTrack) {
-                        console.log('📤 Publicando áudio...');
                         await this.room.localParticipant.publishTrack(this.localAudioTrack);
                         this.microfoneAtivo = true;
-                        console.log('✅ Áudio publicado');
-                        console.log('🔍 Verificando estado do áudio:');
-                        console.log('  - isMuted:', this.localAudioTrack.isMuted);
-                        console.log('  - isEnabled:', this.localAudioTrack.isEnabled);
-                        console.log('  - mediaStreamTrack.enabled:', this.localAudioTrack.mediaStreamTrack?.enabled);
-                        console.log('  - mediaStreamTrack.muted:', this.localAudioTrack.mediaStreamTrack?.muted);
-                        console.log(
-                            '  - mediaStreamTrack.readyState:',
-                            this.localAudioTrack.mediaStreamTrack?.readyState
-                        );
                     }
 
                     this.entrou = true;
 
-                    // Debug: Lista tracks publicadas
-                    console.log('📋 Tracks locais publicadas:');
                     this.room.localParticipant.trackPublications.forEach((pub, sid) => {
                         console.log(`  - ${pub.kind}: ${sid}`);
                     });
@@ -325,8 +229,6 @@ export default {
                 console.error('❌ ERRO:', error);
                 this.leaveRoom();
             }
-
-            // ✅ Marca como conectado
             this.alreadyConnected = true;
         },
 
@@ -347,21 +249,17 @@ export default {
         async mutarDesmutar() {
             if (!this.room) return;
 
-            // Verifica se já tem uma track de áudio publicada
             const audioTrack = this.room.localParticipant.getTrackPublication(Track.Source.Microphone);
 
             if (audioTrack && audioTrack.track) {
-                // Se a track existe, só muta/desmuta
                 if (audioTrack.isMuted) {
                     await audioTrack.track.unmute();
 
                     this.microfoneAtivo = true;
-                    console.log('🎤 Microfone ligado');
                 } else {
                     await audioTrack.track.mute();
 
                     this.microfoneAtivo = false;
-                    console.log('🔇 Microfone desligado');
                 }
             } else {
                 console.warn('⚠️ Nenhuma track de áudio publicada');
@@ -370,18 +268,15 @@ export default {
 
         async changeCamera() {
             if (!this.localVideoTrack) {
-                console.warn('⚠️ Track de vídeo não disponível');
                 return;
             }
 
             if (this.cameraAtiva) {
                 await this.localVideoTrack.mute();
                 this.cameraAtiva = false;
-                console.log('📷 Câmera desligada');
             } else {
                 await this.localVideoTrack.unmute();
                 this.cameraAtiva = true;
-                console.log('📹 Câmera ligada');
             }
         },
 

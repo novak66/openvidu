@@ -50,7 +50,8 @@ export default {
             microfoneAtivo: false as boolean,
             cameraAtiva: false as boolean,
             alreadyConnected: false,
-            newRoomName: '' as string
+            newRoomName: '' as string,
+            isScreenSharing: false
         };
     },
 
@@ -174,6 +175,25 @@ export default {
             this.room.on(RoomEvent.Connected, () => {
                 //  console.log('✅ RoomEvent.Connected');
             });
+        },
+
+        async toggleScreenShare() {
+            try {
+                if (!this.isScreenSharing) {
+                    // Iniciar compartilhamento
+                    await this.room?.localParticipant.setScreenShareEnabled(true);
+                    this.isScreenSharing = true;
+                    console.log('✅ Compartilhamento de tela iniciado!');
+                } else {
+                    // Parar compartilhamento
+                    await this.room?.localParticipant.setScreenShareEnabled(false);
+                    this.isScreenSharing = false;
+                    console.log('❌ Compartilhamento de tela parado!');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao compartilhar tela:', error);
+                alert('Não foi possível compartilhar a tela. Verifique as permissões do navegador.');
+            }
         },
 
         async connectingParticipants() {
@@ -587,6 +607,7 @@ export default {
                             :video="cameraAtiva"
                             @change-camera="changeCamera()"
                             @change-microphone="mutarDesmutar()"
+                            @toggle-screen-share="toggleScreenShare()"
                         />
                         <template v-for="participant of participantsMap.values()" :key="participant.identity">
                             <VideoComponent

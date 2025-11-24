@@ -1,4 +1,4 @@
-package io.openvidu.basic.java;
+package io.jitsi.basic.java;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

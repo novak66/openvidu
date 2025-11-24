@@ -1,4 +1,4 @@
-package io.openvidu.basic.java;
+package io.jitsi.basic.java;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
